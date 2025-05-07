@@ -1,0 +1,25 @@
+name: glaucoma-fov-env
+channels:
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
+dependencies:
+  - python=3.10
+  - pytorch-cuda=11.8
+  - pytorch=2.0.1
+  - torchvision=0.15.2
+  - opencv
+  - pyyaml=6.0.1
+  - onnx=1.14.0
+  - psutil=5.9.8
+  - pycocotools=2.0.7
+  - scipy=1.13.0
+  - pip
+  - pip:
+      - onnxruntime==1.15.1
+      - onnxslim==0.1.31
+      - onnxruntime-gpu==1.18.0
+      - gradio==4.31.5
+      - py-cpuinfo==9.0.0
+      - huggingface-hub==0.23.2
+      - safetensors==0.4.3
