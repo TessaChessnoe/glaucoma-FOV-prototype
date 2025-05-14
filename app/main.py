@@ -18,13 +18,14 @@ def main():
         'SEVERE': 3, 
         'EXTREME': 4
     }
-    resolution = [640, 480]
-    # 0 is external webcam w DSHOW
-    cap = cam_stream_init(resolution[0], resolution[1], 0)
+    res_x = 640
+    res_y = 3*res_x//4 # Lock to 4:3 resolution
+    resolution = [res_x, res_y] # Dbl width for binocular view
+    cap = cam_stream_init(resolution[0], resolution[1], 0) # 0 is external webcam w DSHOW
 
     # Initialize filter & Pre-compute mask
-    severity = SEVERITY_LEVELS['MILD']
-    filter = visionFilter((resolution[0], resolution[1]), 'nasal-step', severity)
+    severity = SEVERITY_LEVELS['MODERATE']
+    filter = visionFilter((resolution[0], resolution[1]), 'arcuate', severity)
     mask = filter.build_mask(severity)
     # Normalize & reshape mask
     mask = (mask.astype('float32') / 255.0)
