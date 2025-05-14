@@ -4,15 +4,14 @@ import numpy as np
 def apply_glaucoma_mask(frame, w=300, blur=20, darkness=0.0):
     """Apply a severe glaucoma-style mask: only a small oval is visible, rest is dark."""
     rows, cols = frame.shape[:2]
-
-    # Create black eliptical mask
+ 
     mask = np.zeros((rows, cols), dtype=np.uint8)
     center_x, center_y = cols // 2, rows // 2
 
     # Ensure w:h is 3:2 ratio, approx FOV of human eye
     major_axis = w // 2
     minor_axis = int(2/3 * major_axis)
-
+    # Create black eliptical mask
     cv2.ellipse(mask, (center_x, center_y), (major_axis, minor_axis), 0, 0, 360, 255, -1)
 
     # Blur the mask to create a smooth transition
