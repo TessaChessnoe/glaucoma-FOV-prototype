@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from glaucomaFilter import visionFilter
+from app.filters.visionFilter import visionFilter
 
 def cam_stream_init(w=640, h=480, cam_index = 0):
     cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)
