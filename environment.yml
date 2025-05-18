@@ -8,6 +8,6 @@ dependencies:
   - matplotlib
   - pandas
   - tqdm
-  - pip
+  - scikit-learn
   - pip:
     - opencv-contrib-python
