@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import random
-import pysaliency
+#import pysaliency
 from sklearn.metrics import roc_auc_score
 
 # Configuration
