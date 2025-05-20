@@ -1,3 +1,7 @@
 # Directories:
 env/
-app/salience/dataset/
+tests/data
+data/
+
+# File types in dirs:
+tests/bms/*.png

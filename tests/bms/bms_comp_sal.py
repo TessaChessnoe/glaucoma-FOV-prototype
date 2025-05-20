@@ -1,11 +1,11 @@
-from app.salience.models import BMS
+from app.models import BMS
 import cv2
 import numpy as np
 import os
 
 def main():
     here = os.path.dirname(__file__)
-    img_path = os.path.join(here,'..', 'test.jpg')
+    img_path = os.path.join(here,'..','data/bluejay.jpg')
 
     input_img = cv2.imread(img_path)
 

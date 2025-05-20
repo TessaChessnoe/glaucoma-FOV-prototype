@@ -2,9 +2,9 @@ README.md
 setup.py
 app/__init__.py
 app/main.py
-app/salience/__init__.py
-app/salience/model_metrics.py
-app/salience/models.py
+app/model_metrics.py
+app/models.py
+app/visionFilter.py
 glaucomaFOV.egg-info/PKG-INFO
 glaucomaFOV.egg-info/SOURCES.txt
 glaucomaFOV.egg-info/dependency_links.txt
