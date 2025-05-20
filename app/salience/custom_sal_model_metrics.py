@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import random
+import pysaliency
 from sklearn.metrics import roc_auc_score
 
 # Configuration
@@ -63,6 +64,7 @@ def calculate_metrics(sal_map, fixations, h, w):
         "kl": calculate_kl_divergence(density_map, sal_map)
     }
 
+# This func calcs AUC-Borji (AUC w/ uniform randomly sampled negatives)
 def calculate_auc(sal_flat, fix_flat):
     pos_indices = np.flatnonzero(fix_flat)
     # If no pos indices, assume performance=random chance
@@ -112,12 +114,12 @@ def main():
             img_id    = im_map[f]
             fixations = fix_map.get(img_id, np.empty((0,2),np.int32))
             valid_files.append((f, img_id, fixations))
-    N_IMAGES = len(valid_files) // 10
+    N_IMAGES = len(valid_files)
     # Take random sample of images for faster metric calcs
     selected_files = random.sample(valid_files, N_IMAGES)
 
     # Initialize saliency detector and metrics array
-    saliency = cv2.saliency.StaticSaliencyFineGrained_create()
+    fine = cv2.saliency.StaticSaliencyFineGrained_create()
     metrics = []
 
     for filename, img_id, fixations in tqdm(selected_files, desc="Processing Images"):
@@ -129,7 +131,7 @@ def main():
             continue
 
         # Compute saliency map
-        success, sal_map = saliency.computeSaliency(img)
+        success, sal_map = fine.computeSaliency(img)
         if not success or sal_map is None:
             continue
 

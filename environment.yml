@@ -9,5 +9,7 @@ dependencies:
   - pandas
   - tqdm
   - scikit-learn
+  - pysaliency
+  - scikit-image
   - pip:
     - opencv-contrib-python
