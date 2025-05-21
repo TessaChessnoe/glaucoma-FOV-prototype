@@ -2,6 +2,7 @@
 env/
 tests/data
 data/
+app/metrics/results
 
 # File types in dirs:
 tests/bms/*.png

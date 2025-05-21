@@ -1,19 +1,11 @@
-import os
 import json
-import cv2
-import numpy as np
-import pandas as pd
 from tqdm import tqdm
-import random
-#import pysaliency
+import numpy as np
+import cv2
+import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-# Configuration
-SPLIT = "val"
-DATASET_DIR = "app/salience/dataset/salicon"
-FIXATIONS_JSON = f"fixations_{SPLIT}2014.json"
 GAUSSIAN_SIGMA = 19 # std for Salicon dataset
-NEGATIVE_SAMPLES = 10000
 
 def load_fixations(json_path):
     # Load fixation points from SALICON annotations JSON file
@@ -35,7 +27,7 @@ def load_image_mapping(json_path):
         img_dict[img["file_name"]] = img['id']
     return img_dict
 
-def calculate_metrics(sal_map, fixations, h, w):
+def calculate_stats(sal_map, fixations, h, w):
     # Check for valid fixations before loading them into metric funcs
     valid = (fixations[:, 1] >= 0) & (fixations[:, 1] < w) & \
             (fixations[:, 0] >= 0) & (fixations[:, 0] < h)
@@ -66,6 +58,7 @@ def calculate_metrics(sal_map, fixations, h, w):
 
 # This func calcs AUC-Borji (AUC w/ uniform randomly sampled negatives)
 def calculate_auc(sal_flat, fix_flat):
+    NEGATIVE_SAMPLES = 10000
     pos_indices = np.flatnonzero(fix_flat)
     # If no pos indices, assume performance=random chance
     if len(pos_indices) == 0:
@@ -100,77 +93,14 @@ def calculate_kl_divergence(true_dist, model_dist, eps=1e-12):
     # Determines how well salience prob. dist mimics ground truth dist.
     return np.sum(p * np.log(eps + p/(q + eps)))
 
-def main():
-    # Pre-compute valid image paths & pre-load fixations
-    print("Loading dataset metadata...")
-    im_map = load_image_mapping(os.path.join(DATASET_DIR, FIXATIONS_JSON))
-    fix_map = load_fixations(os.path.join(DATASET_DIR, FIXATIONS_JSON))
-    image_dir = os.path.join(DATASET_DIR, SPLIT)
-    files = os.listdir(image_dir)
-    # Pre-filter valid files and create processing list
-    valid_files = []
-    for f in tqdm(files, desc="Filtering valid files", unit="img"):
-        if f in im_map:
-            img_id    = im_map[f]
-            fixations = fix_map.get(img_id, np.empty((0,2),np.int32))
-            valid_files.append((f, img_id, fixations))
-    N_IMAGES = len(valid_files)
-    # Take random sample of images for faster metric calcs
-    selected_files = random.sample(valid_files, N_IMAGES)
-
-    # Initialize saliency detector and metrics array
-    fine = cv2.saliency.StaticSaliencyFineGrained_create()
-    metrics = []
-
-    for filename, img_id, fixations in tqdm(selected_files, desc="Processing Images"):
-        # Load image and get fixations
-        img_path = os.path.join(image_dir, filename)
-        img = cv2.imread(img_path)
-
-        if img is None:
-            continue
-
-        # Compute saliency map
-        success, sal_map = fine.computeSaliency(img)
-        if not success or sal_map is None:
-            continue
-
-        # Verify dimensions
-        h, w = img.shape[:2]
-        if sal_map.shape != (h, w):
-            print(f"Skipping {filename}: Saliency map {sal_map.shape} ≠ image {h}x{w}")
-            continue
-        
-        # Verify fixations
-        if fixations.size > 0:
-            # Salicon fixations are (y,x)
-            invalid_y = (fixations[:,0] > h) | (fixations[:,0] < 0)
-            invalid_x = (fixations[:,1] > w) | (fixations[:,1] < 0)
-            if invalid_y.any() or invalid_x.any():
-                print(f"Invalid fixations in {filename}:")
-                print(f"Y range: {fixations[:,0].min()}-{fixations[:,0].max()} (image height: {h})")
-                print(f"X range: {fixations[:,1].min()}-{fixations[:,1].max()} (image width: {w})")
-                continue
-        
-        # Calculate metrics
-        try:
-            h,w = img.shape[:2]
-            img_metrics = calculate_metrics(sal_map, fixations, h, w)
-            metrics.append(img_metrics)
-        except Exception as e:
-            print(f"Skipping {filename}: {str(e)}\n")
-            continue
-
-    # Aggregate and print results
-    if metrics:
-        results = pd.DataFrame(metrics)
-        print(f"\nFinal Metrics ({len(results)} images):")
-        print(f"AUC:  {results.auc.mean():.4f} ± {results.auc.std():.4f}")
-        print(f"NSS:  {results.nss.mean():.4f} ± {results.nss.std():.4f}")
-        print(f"SIM:  {results.sim.mean():.4f} ± {results.sim.std():.4f}")
-        print(f"KL:   {results.kl.mean():.4f} ± {results.kl.std():.4f}")
+def print_stats(stats):
+    # Aggregate stats across each map & print results
+    if stats:
+        df = pd.DataFrame(stats)
+        print(f"\nFinal Stats ({len(df)} images):")
+        print(f"AUC:  {df.auc.mean():.4f} ± {df.auc.std():.4f}")
+        print(f"NSS:  {df.nss.mean():.4f} ± {df.nss.std():.4f}")
+        print(f"SIM:  {df.sim.mean():.4f} ± {df.sim.std():.4f}")
+        print(f"KL:   {df.kl.mean():.4f} ± {df.kl.std():.4f}")
     else:
-        print("No valid metrics calculated - check data paths and processing")
-
-if __name__ == '__main__':
-    main()
+        print("No valid stats calculated: check data paths and processing")
