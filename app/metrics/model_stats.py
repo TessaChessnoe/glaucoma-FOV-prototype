@@ -4,7 +4,8 @@ import cv2
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from app.models import BMS
+from app.models import BMS, IttiKoch
+import pysaliency
 
 from app.metrics.stat_helpers import (
     load_image_mapping,
@@ -12,11 +13,22 @@ from app.metrics.stat_helpers import (
     calculate_stats
 )
 
-# List of detectors to evaluate with metrics 
+# Download built-in models into your model_loc folder
+model_root = os.path.join(os.path.dirname(__file__), "pysal_models")
+
 DETECTORS = {
+    "IKN": IttiKoch,
+    "AIM": pysaliency.AIM(location=model_root),
+    "SUN": pysaliency.SUN(location=model_root),
     "BMS": BMS,
     "Finegrain": cv2.saliency.StaticSaliencyFineGrained_create(),
-    "SpectralRes": cv2.saliency.StaticSaliencySpectralResidual_create()
+    "SpectralRes": cv2.saliency.StaticSaliencySpectralResidual_create(),
+    # "GBVS-IKN": pysaliency.GBVSIttiKoch(location=model_root),
+    # "COVSAL": pysaliency.CovSal(location=model_root),
+    # "Judd": pysaliency.Judd(location=model_root),
+    # "RARE2012": pysaliency.RARE2012(location=model_root),
+    # "CAS": pysaliency.ContextAwareSaliency(location=model_root),
+    # "GBVS": pysaliency.GBVS(location=model_root),
 }
     
 def gather_dataset(input_dir, fixation_json):
@@ -40,20 +52,30 @@ def gather_dataset(input_dir, fixation_json):
         valid.append((fn, fix_arr))
     return valid
 
-def process_one_image(detector, img_path, fixations):
+def process_one_image(name, detector, img_path, fixations):
     """
     Load, compute saliency, check dims, then calculate metrics.
     Returns a dict of metrics or None (if failed/skip).
     """
+    #opencv_API = ["BMS", "Finegrain", "SpectralRes"]
     # Read input image
     img = cv2.imread(img_path)
     if img is None:
         return None
 
     # Compute saliency map
-    success, sal_map = detector.computeSaliency(img)
-    if not success or sal_map is None:
+    if hasattr(detector, "computeSaliency"):
+        success, sal_map = detector.computeSaliency(img)
+    else:  # name in pysal
+        sal_map = detector.saliency_map(img)
+        success = sal_map is not None
+    if not success:
         return None
+    
+    # ensure 2D float32 map
+    sal_map = np.array(sal_map, dtype=np.float32)
+    if sal_map.ndim == 3 and sal_map.shape[2] == 1:
+        sal_map = sal_map[:, :, 0]
 
     # Verify that salience map has same shape as input
     h, w = img.shape[:2]
@@ -96,18 +118,19 @@ def evaluate_all(input_dir, output_dir, fixation_json, sample_size=None):
     i = 0 # used for progress bar text
 
     # 2) Compute saliency maps & compare against ground truth
+    stat_row = {}
     for name, detector in DETECTORS.items():
         i += 1
         all_runs_stats = []
         for fn, fix in tqdm(dataset, desc=f"Running model {i}/{len(DETECTORS)} {name} "):
             img_path = os.path.join(input_dir, fn)
-            m = process_one_image(detector, img_path, fix)
+            m = process_one_image(name, detector, img_path, fix)
             if m:
                 all_runs_stats.append(m)
-        # metric_row is a dict with stat names as keys
-        stat_row = aggregate_metrics(all_runs_stats)
+        # stat_row is a dict with stat names as keys
         stat_row["model"] = name
         stat_row["n_images"] = len(all_runs_stats)
+        stat_row = aggregate_metrics(all_runs_stats)
         stats.append(stat_row)
 
     # 3) Write stats to csv
@@ -127,7 +150,7 @@ def main():
     # Set other args for eval func
     input_dir = "data/Salicon/val"
     fixation_json = "data/Salicon/fixations_val2014.json"
-    sample_size = 100
+    sample_size = 1
 
     # Calculate aggregate metrics for each detector, write result to csv
     evaluate_all(input_dir, output_dir, fixation_json, sample_size)

@@ -3,6 +3,7 @@ env/
 tests/data
 data/
 app/metrics/results
+app/metrics/pysal_models
 
 # File types in dirs:
 tests/bms/*.png
