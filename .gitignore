@@ -4,6 +4,7 @@ tests/data
 data/
 app/metrics/results
 app/metrics/pysal_models
+glaucomaFOV.egg-info/
 
 # File types in dirs:
 tests/bms/*.png
