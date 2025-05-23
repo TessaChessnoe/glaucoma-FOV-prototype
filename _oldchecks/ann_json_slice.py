@@ -13,7 +13,7 @@ def pretty_print_annotation(ann, k=3):
     }
     print(json.dumps(snippet, indent=2))
 
-input_dir = 'app/salience/dataset/Salicon'
+input_dir = 'data/Salicon'
 
 # Adjust the path to your actual JSON file
 with open(os.path.join(input_dir, "fixations_train2014.json")) as f:

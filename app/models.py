@@ -148,3 +148,66 @@ class BMS:
         else:
             return False, None
         return True, sal_map
+
+class BMSFast:
+    @staticmethod
+    def _activate_bool_map(bool_map: np.ndarray) -> np.ndarray:
+        """
+        Given a binary map (uint8, values 0 or 1), returns a float32
+        map of 1.0 in those connected components that do NOT touch the border.
+        Uses a single floodFill from (0,0) to mark all border-connected background,
+        then inverts that to isolate interior blobs.
+        """
+        # copy & scale to 0/255 so floodFill works
+        im = (bool_map * 255).astype(np.uint8)
+        h, w = im.shape
+
+        # mask for floodFill must be 2 pixels larger
+        ff_mask = np.zeros((h + 2, w + 2), np.uint8)
+        # flood fill from top-left corner (assumed background)
+        cv2.floodFill(im, ff_mask, (0, 0), 255)
+
+        # im now has 255 for all border-connected areas
+        # interior regions remain at their original 255
+        # So (bool_map*255)==255 marks all original foreground,
+        # and im==255 marks border-connected areas.
+        interior = ((bool_map * 255) == 255) & (im != 255)
+        return interior.astype(np.float32)
+
+    @staticmethod
+    def computeSaliency(img, n_thresholds=16, lb=25, ub=230):
+        """
+        Faster BMS:  
+        1) threshold via OpenCV  
+        2) flood-fill to remove border-touching blobs  
+        3) accumulate  
+        4) blur + normalize
+        """
+        if img is None:
+            return False, None
+        if img.ndim not in (2, 3):
+            return False, None
+
+        # gray in [0,255] float
+        gray = (rgb2gray(img) * 255.0).astype(np.uint8)
+
+        # thresholds
+        thresholds = np.linspace(lb, ub, n_thresholds, endpoint=False).astype(np.uint8)
+
+        # accumulate interior blobs
+        acc = np.zeros_like(gray, dtype=np.float32)
+        for thr in thresholds:
+            # fast thresholding
+            _, bm = cv2.threshold(gray, int(thr), 1, cv2.THRESH_BINARY)
+            acc += BMSFast._activate_bool_map(bm)
+
+        # smooth
+        acc = cv2.GaussianBlur(acc, (0, 0), sigmaX=3)
+
+        # normalize
+        minv, maxv = acc.min(), acc.max()
+        if maxv > minv:
+            sal = (acc - minv) / (maxv - minv)
+            return True, sal.astype(np.float32)
+        else:
+            return False, None
