@@ -2,7 +2,7 @@
 env/
 tests/data
 data/
-app/metrics/results
+#app/metrics/results
 app/metrics/pysal_models
 glaucomaFOV.egg-info/
 tests/all_models/results

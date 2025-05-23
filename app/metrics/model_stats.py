@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from app.models import BMS, BMSFast, IttiKoch
 import pysaliency
+from concurrent.futures import ThreadPoolExecutor
 
 from app.metrics.stat_helpers import (
     load_image_mapping,
@@ -17,12 +18,12 @@ from app.metrics.stat_helpers import (
 model_root = os.path.join(os.path.dirname(__file__), "pysal_models")
 
 DETECTORS = {
-    "BMS": BMSFast,
-    "IKN": IttiKoch,
-    "AIM": pysaliency.AIM(location=model_root),
-    "SUN": pysaliency.SUN(location=model_root),
-    "Finegrain": cv2.saliency.StaticSaliencyFineGrained_create(),
-    "SpectralRes": cv2.saliency.StaticSaliencySpectralResidual_create(),
+    # "AIM": pysaliency.AIM(location=model_root),
+    # "SUN": pysaliency.SUN(location=model_root),
+    # "Finegrain": cv2.saliency.StaticSaliencyFineGrained_create(),
+    # "SpectralRes": cv2.saliency.StaticSaliencySpectralResidual_create(),
+    "BMS": BMS,
+    # "IKN": IttiKoch,
     # "GBVS-IKN": pysaliency.GBVSIttiKoch(location=model_root),
     # "COVSAL": pysaliency.CovSal(location=model_root),
     # "Judd": pysaliency.Judd(location=model_root),
@@ -30,6 +31,11 @@ DETECTORS = {
     # "CAS": pysaliency.ContextAwareSaliency(location=model_root),
     # "GBVS": pysaliency.GBVS(location=model_root),
 }
+EXPENSIVE = ["AIM", "SUN"]
+
+def _process(args):
+    detector, img_path, fix = args
+    return process_one_image(detector, img_path, fix)
     
 def gather_dataset(input_dir, fixation_json):
     """
@@ -111,28 +117,45 @@ def aggregate_metrics(metrics_list):
 def evaluate_all(input_dir, output_dir, fixation_json, sample_size=None):
     # 1) Get input images and ground truth fixations for eval
     dataset = gather_dataset(input_dir, fixation_json)
-    # Should add cond to bypass sample if using entire set
-    if sample_size:
-        dataset = random.sample(dataset, sample_size)
 
     # Init vars used in processing loop
     stats = []
     i = 0 # used for progress bar text
 
-    # 2) Compute saliency maps & compare against ground truth
-    stat_row = {}
+    # 2) Compute saliency maps for each detector process images in parallel
     for name, detector in DETECTORS.items():
+        # Display model progress bar message
         i += 1
-        all_runs_stats = []
-        for fn, fix in tqdm(dataset, desc=f"Running model {i}/{len(DETECTORS)} {name} "):
-            img_path = os.path.join(input_dir, fn)
-            m = process_one_image(detector, img_path, fix)
-            if m:
-                all_runs_stats.append(m)
-        # stat_row is a dict with stat names as keys
-        stat_row["model"] = name
-        stat_row["n_images"] = len(all_runs_stats)
-        stat_row = aggregate_metrics(all_runs_stats)
+        desc = f"Running model {i}/{len(DETECTORS)} {name}"
+
+        # Use subset of data & smaller thread count for expensive models
+        if name in EXPENSIVE:
+            use_set = random.sample(dataset, k=min(sample_size, len(dataset)))
+            # Prevent crashes from memory overallocation
+            max_workers = 3
+        else:
+            use_set = dataset
+            # Leave 2 cores free: prevents CPU saturation
+            max_workers = max(1, os.cpu_count() - 2)  
+            
+        # Build process args over chosen set
+        args = [(detector, os.path.join(input_dir, fn), fix)
+                for fn, fix in use_set]
+        
+        detector_stats = []
+
+        # parallel map over args
+        with ThreadPoolExecutor(max_workers=max_workers) as exe:
+            for result in tqdm(exe.map(_process, args),
+                               total=len(args),
+                               desc=desc):
+                 if result:
+                     detector_stats.append(result)
+        # aggregate and record
+        stat_row = {
+            "model": name,
+            "n_images": len(detector_stats)} # record whether this was sampled or full
+        stat_row.update(aggregate_metrics(detector_stats))
         stats.append(stat_row)
 
     # 3) Write stats to csv
@@ -152,7 +175,7 @@ def main():
     # Set other args for eval func
     input_dir = "data/Salicon/val"
     fixation_json = "data/Salicon/fixations_val2014.json"
-    sample_size = 5000
+    sample_size = 1000
 
     # Calculate aggregate metrics for each detector, write result to csv
     evaluate_all(input_dir, output_dir, fixation_json, sample_size)
